@@ -1,16 +1,14 @@
 import uuid
-
-from sqlalchemy import (
-    Column,
-    UUID,
-    String,
-    Boolean,
-    Integer,
-    ForeignKey,
-    DateTime,
-    func,
-)
-from sqlalchemy.orm import declarative_base, relationship
+from sqlalchemy import Column, Enum
+from sqlalchemy import UUID
+from sqlalchemy import String
+from sqlalchemy import Boolean
+from sqlalchemy import Integer
+from sqlalchemy import ForeignKey
+from sqlalchemy import DateTime
+from sqlalchemy import func
+from sqlalchemy.orm import declarative_base
+from sqlalchemy.orm import relationship
 
 
 Base = declarative_base()
@@ -24,13 +22,18 @@ class User(Base):
     email = Column(String, unique=True, nullable=False)
     hashed_password = Column(String, nullable=False)
     created_at = Column(DateTime(timezone=True), default=func.now())
+    activation_time = Column(DateTime(timezone=True))
     is_active = Column(Boolean(), default=False)
 
-    account_activation_codes = relationship(
-        "ActivationCode", back_populates="user", uselist=False
-    )
-    messages = relationship("Message", back_populates="user")
-    connection_history = relationship("ConnectionHistory", back_populates="user")
+    account_activation_codes = relationship(argument="ActivationCode", back_populates="user")
+    messages = relationship(argument="Message", back_populates="user")
+    connection_history = relationship(argument="ConnectionHistory", back_populates="user")
+
+
+class ActivationStatus(str, Enum):
+    PENDING = "pending"
+    ACTIVATED = "activated"
+    EXPIRED = "expired"
 
 
 class ActivationCode(Base):
@@ -40,8 +43,21 @@ class ActivationCode(Base):
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.user_id"))
     code = Column(String, nullable=False, unique=True)
     created_at = Column(DateTime(timezone=True), default=func.now())
+    status = Column(String, nullable=False, default='pending')
 
-    user = relationship("User", back_populates="account_activation_codes")
+    user = relationship(argument="User", back_populates="account_activation_codes")
+
+    @property
+    def is_expired(self) -> bool:
+        return ActivationStatus.EXPIRED in self.status
+
+    @property
+    def is_activated(self) -> bool:
+        return ActivationStatus.ACTIVATED in self.status
+
+    @property
+    def is_pending(self) -> bool:
+        return ActivationStatus.PENDING in self.status
 
 
 class ConnectionHistory(Base):
@@ -63,4 +79,4 @@ class Message(Base):
     content = Column(String, nullable=False)
     created_at = Column(DateTime(timezone=True), default=func.now())
 
-    user = relationship("User", back_populates="messages")
+    user = relationship(argument="User", back_populates="messages")

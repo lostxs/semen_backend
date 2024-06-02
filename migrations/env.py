@@ -29,7 +29,7 @@ target_metadata = Base.metadata
 # my_important_option = config.get_main_option("my_important_option")
 # ... etc.
 config.set_main_option(
-    "sqlalchemy.url", "postgresql+asyncpg://postgres:1234@localhost/webdb"
+    "sqlalchemy.url", "postgresql+asyncpg://postgres:postgres@localhost:5432/postgres"
 )
 
 

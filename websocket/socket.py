@@ -1,27 +1,39 @@
 import json
-from dataclasses import dataclass, field
+import logging
+from dataclasses import dataclass
+from dataclasses import field
 from datetime import datetime
-
+from uuid import UUID
 from fastapi import WebSocket
 from typing import Dict
-
 from redis.asyncio import Redis
-from sqlalchemy import select
+from sqlalchemy.future import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from starlette.websockets import WebSocketState
 
-from api.actions.message import get_messages, save_message
+from api.message.actions import get_messages
+from api.message.actions import save_message
 from db.models import ConnectionHistory
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+
+@dataclass
+class User:
+    user_id: UUID
+    username: str
 
 
 @dataclass
 class ConnectionManager:
-    active_connections: Dict[WebSocket, dict] = field(default_factory=dict)
+    active_connections: Dict[WebSocket, User] = field(default_factory=dict)
     last_message_index: Dict[WebSocket, int] = field(default_factory=dict)
 
     async def connect(
         self,
         websocket: WebSocket,
-        user: dict,
+        user: User,
         db: AsyncSession,
         redis_pool_messages: Redis,
     ):
@@ -30,15 +42,30 @@ class ConnectionManager:
         self.last_message_index[websocket] = -20
 
         initial_messages = await get_messages(redis_pool_messages, start=-20, count=20)
+        sanitized_messages = [
+            {
+                "id": message["id"],
+                "username": message["username"],
+                "content": message["content"],
+                "created_at": message["created_at"]
+            }
+            for message in initial_messages
+        ]
         await websocket.send_text(
-            json.dumps({"type": "initial_load", "messages": initial_messages})
+            json.dumps({"type": "initial_load", "messages": sanitized_messages})
         )
-        print(f"User {user.username} connected. Current messages: {initial_messages}")
 
         new_connection = ConnectionHistory(user_id=user.user_id)
         db.add(new_connection)
         await db.commit()
         await self.send_active_users()
+
+    async def send_active_users(self):
+        active_users = [user.username for user in self.active_connections.values()]
+        users_list = json.dumps({"type": "users_list", "users": active_users})
+        for websocket in self.active_connections:
+            if not websocket.client_state == WebSocketState.DISCONNECTED:
+                await websocket.send_text(users_list)
 
     async def disconnect(self, websocket: WebSocket, db: AsyncSession):
         user = self.active_connections.pop(websocket, None)
@@ -72,14 +99,14 @@ class ConnectionManager:
         }
         await websocket.send_text(json.dumps(message_data, ensure_ascii=False))
         await save_message(
-            user_id=user.user_id,
+            user_id=str(user.user_id),
             username=user.username,
             content=message,
             db=db,
             redis_pool_messages=redis_pool_messages,
         )
 
-    async def broadcast(
+    async def broadcast_message(
         self,
         message: str,
         username: str,
@@ -96,12 +123,6 @@ class ConnectionManager:
         for connection in self.active_connections:
             if connection != sender_websocket:
                 await connection.send_text(json.dumps(message_data, ensure_ascii=False))
-
-    async def send_active_users(self):
-        active_users = [user.username for user in self.active_connections.values()]
-        users_list = json.dumps({"type": "users_list", "users": active_users})
-        for websocket in self.active_connections:
-            await websocket.send_text(users_list)
 
 
 # def sanitize(text):

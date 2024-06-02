@@ -1,27 +1,24 @@
+import logging
 import smtplib
+import random
+from typing import cast
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
-import random
-
-from sqlalchemy import select
+from sqlalchemy.future import select
 from sqlalchemy.ext.asyncio import AsyncSession
-
-
 from db.models import ActivationCode
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 
 async def generate_activation_code(session: AsyncSession):
-    """Генерирует уникальный 6-значный код для пользователя и проверяет его уникальность."""
-    unique = False
-    code = None
-    while not unique:
-        code = str(random.randint(100000, 999999))
-        exist_query = select(ActivationCode).where(ActivationCode.code == code)
+    while True:
+        code = f"{random.randint(100000, 999999)}"
+        exist_query = select(ActivationCode).where(cast("ColumnElement[bool]", ActivationCode.code == code))
         result = await session.execute(exist_query)
-        code_exist = result.scalar_one_or_none()
-        if code_exist is None:
-            unique = True
-    return code
+        if result.scalar_one_or_none() is None:
+            return code
 
 
 async def send_activation_code(email: str, activation_code: str):
@@ -46,4 +43,4 @@ async def send_activation_code(email: str, activation_code: str):
         server.sendmail(sender_email, receiver_email, message.as_string())
         server.quit()
     except Exception as e:
-        print(f"Error sending email: {e}")
+        logger.info(f"Error sending email: {e}")

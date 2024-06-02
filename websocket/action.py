@@ -1,6 +1,5 @@
 import json
-
-from api.actions.message import get_messages
+from api.message.actions import get_messages
 from websocket.socket import ConnectionManager
 
 manager = ConnectionManager()
@@ -15,7 +14,7 @@ async def handle_messages(websocket, user, db, redis_messages):
         if action == "send_message":
             content = parsed_data.get("content")
             await manager.send_personal_message(content, websocket, db, redis_messages)
-            await manager.broadcast(content, user.username, websocket)
+            await manager.broadcast_message(content, user.username, websocket)
 
         elif action == "load_more_messages":
             await load_more_messages(websocket, redis_messages)
@@ -36,6 +35,14 @@ async def load_more_messages(websocket, redis_messages):
 async def handle_websocket_disconnect(user, websocket, db):
     await manager.disconnect(websocket, db)
     leave_message = f"Client #{user.username} left the chat."
-    await manager.broadcast(
+    await manager.broadcast_message(
         leave_message, user.username, websocket, system_message=True
+    )
+
+
+async def handle_websocket_connect(user, websocket, db, redis_messages):
+    await manager.connect(websocket, user, db, redis_messages)
+    join_message = f"Client #{user.username} joined the chat."
+    await manager.broadcast_message(
+        join_message, user.username, websocket, system_message=True
     )

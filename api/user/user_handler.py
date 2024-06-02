@@ -1,15 +1,18 @@
 from typing import Union
-from uuid import UUID
-
-from fastapi import APIRouter, Depends, HTTPException
-
-from sqlalchemy.exc import IntegrityError, NoResultFound, SQLAlchemyError
+from fastapi import APIRouter
+from fastapi import Depends
+from fastapi import HTTPException
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import NoResultFound
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
-
-from api.actions.auth import verify_user_token, get_user_details_by_username
-from api.actions.user import _create_new_user, _activate_user_account
-from api.schemas import ShowUser, UserCreate
 from db.session import get_db
+from api.schemas import ShowUser
+from api.schemas import UserCreate
+from api.schemas import ActivationCodeData
+from .dependencies import get_current_user
+from .actions import _create_new_user
+from .actions import _activate_user_account
 
 user_router = APIRouter()
 
@@ -32,32 +35,25 @@ async def create_user(body: UserCreate, db: AsyncSession = Depends(get_db)) -> S
             raise HTTPException(
                 status_code=400 if "already exists" in detail else 500, detail=detail
             )
-    except SQLAlchemyError:
-        await db.rollback()
-        raise HTTPException(
-            status_code=500, detail="An error occurred while processing your request."
-        )
-    except Exception:
-        await db.rollback()
-        raise HTTPException(
-            status_code=500, detail="An internal server error occurred."
-        )
 
 
 @user_router.post("/activate")
 async def activate_account(
-    user_id: UUID, code: str, db: AsyncSession = Depends(get_db)
+    data: ActivationCodeData, db: AsyncSession = Depends(get_db)
 ) -> Union[dict, None]:
+    user_id = data.user_id
+    code = data.code
     try:
         await _activate_user_account(user_id, code, db)
         return {"message": "Account activated successfully"}
     except ValueError as e:
-        if "Invalid activation code" in str(e):
-            raise HTTPException(status_code=400, detail="Invalid activation code")
+        await db.rollback()
+        if "Invalid or already used activation code." in str(e):
+            raise HTTPException(status_code=400, detail=str(e))
         elif "Activation code expired" in str(e):
-            raise HTTPException(status_code=402, detail="Activation code expired")
+            raise HTTPException(status_code=400, detail=str(e))
     except NoResultFound:
-        raise HTTPException(status_code=404, detail="User not found")
+        raise HTTPException(status_code=404, detail="No results found.")
     except SQLAlchemyError:
         await db.rollback()
         raise HTTPException(
@@ -65,15 +61,6 @@ async def activate_account(
         )
 
 
-@user_router.get("/current_user")
-async def get_current_user_route(
-    username: str = Depends(verify_user_token), db: AsyncSession = Depends(get_db)
-):
-    user = await get_user_details_by_username(db, username)
-    return {
-        "user": {
-            "email": user.email,
-            "username": user.username,
-            "user_id": user.user_id,
-        }
-    }
+@user_router.get("/current_user", response_model=ShowUser)
+async def get_user(current_user: ShowUser = Depends(get_current_user)):
+    return current_user

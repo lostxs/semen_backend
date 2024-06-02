@@ -1,6 +1,8 @@
 import uuid
+from pydantic import BaseModel
+from pydantic import EmailStr
+from pydantic import constr
 
-from pydantic import BaseModel, EmailStr
 
 #########################
 # BLOCK WITH API MODELS #
@@ -15,18 +17,18 @@ class TunedModel(BaseModel):
 
 
 class ShowUser(TunedModel):
-    user_id: uuid.UUID
+    # user_id: uuid.UUID
     username: str
     email: EmailStr
     is_active: bool
 
 
 class UserCreate(BaseModel):
-    username: str
+    username: constr(min_length=1, max_length=50)
     email: EmailStr
-    password: str
+    password: constr(min_length=6)
 
 
-class Token(BaseModel):
-    access_token: str
-    token_type: str
+class ActivationCodeData(BaseModel):
+    user_id: uuid.UUID
+    code: str
