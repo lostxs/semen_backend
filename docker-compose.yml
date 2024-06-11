@@ -2,7 +2,9 @@ version: "3.8"
 services:
   db:
     container_name: "db"
-    image: postgres:14.1-alpine
+    build:
+      context: .
+      dockerfile: Dockerfile
     restart: always
     environment:
       - POSTGRES_USER=postgres
@@ -12,6 +14,10 @@ services:
       - "5432:5432"
     networks:
       - custom
+    command: >
+      postgres -c ssl=on
+               -c ssl_cert_file=/var/lib/postgresql/certs/server.crt
+               -c ssl_key_file=/var/lib/postgresql/certs/server.key
   redis:
     container_name: "redis"
     image: redis:6.0-alpine
