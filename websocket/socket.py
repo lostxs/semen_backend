@@ -97,6 +97,7 @@ class ConnectionManager:
             "created_at": datetime.now().isoformat(),
             "type": "new_message",
         }
+        logger.info(f"Sending message: {message_data}")
         await websocket.send_text(json.dumps(message_data, ensure_ascii=False))
         await save_message(
             user_id=str(user.user_id),
@@ -120,22 +121,19 @@ class ConnectionManager:
             "created_at": datetime.now().isoformat(),
             "type": message_type,
         }
+        logger.info(f"Broadcasting message: {message_data}")
         for connection in self.active_connections:
             if connection != sender_websocket:
                 await connection.send_text(json.dumps(message_data, ensure_ascii=False))
 
+    async def broadcast_typing(self, username: str, sender_websocket: WebSocket):
+        typing_data = json.dumps({"type": "typing", "username": username})
+        for connection in self.active_connections:
+            if connection != sender_websocket and connection.client_state == WebSocketState.CONNECTED:
+                await connection.send_text(typing_data)
 
-# def sanitize(text):
-#    return html.escape(text)
-
-
-#################################################################################
-# Для полной истории
-# async def connect(self, websocket: WebSocket, user: dict, db: AsyncSession):
-#        await websocket.accept()
-#        self.active_connections[websocket] = user
-#        new_connection = ConnectionHistory(user_id=user.user_id)
-#        if ConnectionHistory(user.user_id == user.user_id):
-#        db.add(new_connection)
-#        await db.commit()
-#################################################################################
+    async def broadcast_stop_typing(self, username: str, sender_websocket: WebSocket):
+        stop_typing_data = json.dumps({"type": "stop_typing", "username": username})
+        for connection in self.active_connections:
+            if connection != sender_websocket and connection.client_state == WebSocketState.CONNECTED:
+                await connection.send_text(stop_typing_data)

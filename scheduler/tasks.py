@@ -1,4 +1,5 @@
 import logging
+from api.user.dals import ActivationCodeDAL
 import settings
 from datetime import timedelta
 from uuid import UUID
@@ -16,6 +17,8 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 
 async def expire_activation_code(activation_code_id, session_factory):
     async with session_factory() as session:
+        activation_dal = ActivationCodeDAL(session)
+
         result = await session.execute(
             select(ActivationCode)
             .where(ActivationCode.id == activation_code_id)
@@ -23,20 +26,30 @@ async def expire_activation_code(activation_code_id, session_factory):
         activation_code = result.scalars().first()
 
         if activation_code.status == ActivationStatus.PENDING:
-            activation_code.status = ActivationStatus.EXPIRED
-            await session.commit()
-            logging.info(f"Expired activation code for user ID {activation_code.user_id}")
+            await activation_dal.delete_activation_code(activation_code)
+            logging.info(f"Expired and deleted activation code for user ID {activation_code.id}")
+
+            job_id = await retrieve_job_id(activation_code.id)
+            if job_id:
+                job = scheduler.get_job(job_id)  
+                if job:
+                    scheduler.remove_job(job_id)
+                    logging.info(f"Removed job {job_id} for expired activation {activation_code.id}")
+                else:
+                    logging.warning(f"Job {job_id} not found, possibly already removed.")
+                
+                await remove_job_id(activation_code.id)
         else:
             logging.info(
-                f"No action needed: Activation code status for user ID {activation_code.user_id} /"
-                f"is already {activation_code.status}")
+                f"No action needed: Activation code status for user ID {activation_code.id} "
+                f"is already {activation_code.status}"
+            )
 
 
 async def store_job_id(user_id: UUID, job_id: str):
     redis = await get_redis_scheduler_pool()
     key = f"user:{user_id}:job"
     await redis.set(key, job_id)
-    # expiry_seconds = timedelta(minutes=settings.ACTIVATION_CODE_EXPIRE_MINUTES).total_seconds()
     expiry_seconds = timedelta(hours=1).total_seconds()
     await redis.expire(key, time=int(expiry_seconds))
 

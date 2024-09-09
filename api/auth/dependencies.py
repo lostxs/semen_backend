@@ -32,22 +32,22 @@ async def verify_token(
 ) -> UUID:
     token = request.cookies.get("session")
     if not token:
-        raise HTTPException(status_code=401, detail="Not authenticated")
+        raise HTTPException(status_code=401, detail="Необходима авторизация.")
     try:
         payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
         user_id = UUID(payload.get("sub"))
         if user_id is None or not await redis.get(f"user_id:{user_id}"):
             raise HTTPException(
-                status_code=401, detail="Authentication failed or token expired"
+                status_code=401, detail="Авторизация не удалась. Пожалуйста, авторизуйтесь заново."
             )
         return user_id
     except ExpiredSignatureError:
         logger.info("Token has expired")
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token has expired")
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Токен истек. Пожалуйста, авторизуйтесь заново.")
     except (jwt.PyJWTError, ValueError) as e:
         logger.info(f"Authentication error: {e}")
         raise HTTPException(
-            status_code=401, detail="Invalid authentication credentials"
+            status_code=401, detail="Необходима авторизация. Пожалуйста, авторизуйтесь заново."
         )
 
 
@@ -81,9 +81,10 @@ async def check_session(token: str, redis_auth: Redis) -> Tuple[Optional[UUID], 
 async def maintain_session(websocket, token, redis_auth):
     try:
         while True:
-            await asyncio.sleep(5)
+            await asyncio.sleep(10)  # 10 seconds
             _, token_valid = await check_session(token, redis_auth)
             if not token_valid:
+                await websocket.send_json({"type": "AUTH_STATUS", "isAuthenticated": False})
                 if websocket.application_state != WebSocketState.DISCONNECTED:
                     await websocket.close(code=4001, reason="Connections refused.")
                     break

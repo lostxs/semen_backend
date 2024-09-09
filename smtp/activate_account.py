@@ -4,9 +4,11 @@ import random
 from typing import cast
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
+from sqlalchemy import ColumnElement
 from sqlalchemy.future import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from db.models import ActivationCode
+import settings
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -22,9 +24,9 @@ async def generate_activation_code(session: AsyncSession):
 
 
 async def send_activation_code(email: str, activation_code: str):
-    sender_email = "kritden@yandex.ru"
+    sender_email = settings.SMTP_USER
     receiver_email = email
-    password = "rvqxwfbjsyrqjocs"
+    password = settings.SMTP_PASSWORD
 
     message = MIMEMultipart("alternative")
     message["Subject"] = "Activation Code"
@@ -38,7 +40,7 @@ async def send_activation_code(email: str, activation_code: str):
     message.attach(part)
 
     try:
-        server = smtplib.SMTP_SSL("smtp.yandex.ru", 465)
+        server = smtplib.SMTP_SSL(settings.SMTP_HOST, settings.SMTP_PORT)
         server.login(sender_email, password)
         server.sendmail(sender_email, receiver_email, message.as_string())
         server.quit()

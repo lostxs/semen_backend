@@ -22,13 +22,17 @@ class ShowUser(TunedModel):
     email: EmailStr
     is_active: bool
 
+class ShowActivationCode(TunedModel):
+    email: EmailStr
+    username: str
+    is_active: bool = False
+    # code: str
 
 class UserCreate(BaseModel):
-    username: constr(min_length=1, max_length=50)
+    username: constr(min_length=1, max_length=50) # type: ignore
     email: EmailStr
-    password: constr(min_length=6)
+    password: constr(min_length=6) # type: ignore
 
 
 class ActivationCodeData(BaseModel):
-    user_id: uuid.UUID
     code: str

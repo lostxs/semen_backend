@@ -25,7 +25,6 @@ class User(Base):
     activation_time = Column(DateTime(timezone=True))
     is_active = Column(Boolean(), default=False)
 
-    account_activation_codes = relationship(argument="ActivationCode", back_populates="user")
     messages = relationship(argument="Message", back_populates="user")
     connection_history = relationship(argument="ConnectionHistory", back_populates="user")
 
@@ -40,12 +39,13 @@ class ActivationCode(Base):
     __tablename__ = "account_activation_codes"
 
     id = Column(Integer, primary_key=True)
-    user_id = Column(UUID(as_uuid=True), ForeignKey("users.user_id"))
+    email = Column(String, nullable=True)
+    username = Column(String, nullable=True)  
+    hashed_password = Column(String, nullable=True)  
     code = Column(String, nullable=False, unique=True)
     created_at = Column(DateTime(timezone=True), default=func.now())
     status = Column(String, nullable=False, default='pending')
 
-    user = relationship(argument="User", back_populates="account_activation_codes")
 
     @property
     def is_expired(self) -> bool:

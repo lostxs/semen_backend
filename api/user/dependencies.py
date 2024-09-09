@@ -15,18 +15,13 @@ async def get_current_user(
         redis: Redis = Depends(get_redis_auth_pool),
         token: str = Cookie(default=None, alias="session")
 ):
-    credentials_exception = HTTPException(status_code=401, detail="Could not validate credentials")
-    if token is None:
-        raise credentials_exception
+    credentials_exception = HTTPException(status_code=401, detail="Необходима авторизация.")
     try:
         payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
         user_id: str = payload.get("sub")
-        if user_id is None:
-            raise credentials_exception
-
         session_active = await redis.exists(f"user_id:{user_id}")
         if not session_active:
-            raise HTTPException(status_code=401, detail="Session has been revoked")
+            raise HTTPException(status_code=401, detail="Сессия истекла. Пожалуйста, авторизуйтесь заново.")
 
         user = await _get_user_by_id(session=session, user_id=user_id)
         if user is None:
@@ -34,4 +29,4 @@ async def get_current_user(
 
         return user
     except jwt.PyJWTError:
-        raise HTTPException(status_code=403, detail="Invalid token")
+        raise HTTPException(status_code=403, detail="Необходима авторизация.")

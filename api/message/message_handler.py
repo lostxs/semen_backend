@@ -15,7 +15,7 @@ from db.redis import get_redis_chat_auth_pool
 from db.redis import get_redis_messages_pool
 from .dependencies import check_chat_session
 from .security import create_chat_token
-from ..user.actions import _get_user_by_id # noqa
+from ..user.actions import _get_user_by_id 
 from ..user.dependencies import get_current_user
 from logger import log_connection
 
@@ -25,7 +25,7 @@ message_router = APIRouter()
 @message_router.get("/request-chat-token")
 async def get_chat_token(user=Depends(get_current_user)):
     if not user:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found or not authenticated")
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Пользователь не найден.")
     chat_token = await create_chat_token(user.user_id, user.username)
     return JSONResponse({"chat_token": chat_token})
 
@@ -40,13 +40,9 @@ async def websocket_endpoint(
         session: AsyncSession = Depends(get_db)
 ):
     user = None
-    if token is None:
-        await websocket.close(code=4001, reason="No token provided")
-        return
-
     user_id, token_valid = await check_chat_session(token, redis_auth)
     if not token_valid:
-        await websocket.close(code=4001, reason="No token valid")
+        await websocket.close(code=4001, reason="Недействительный токен")
         return
 
     try:
@@ -57,7 +53,7 @@ async def websocket_endpoint(
                 return
 
             if not token_valid:
-                await websocket.close(code=4001, reason="Token expired")
+                await websocket.close(code=4001, reason="Токен устарел")
                 break
 
             await handle_websocket_connect(user, websocket, session, redis_messages)

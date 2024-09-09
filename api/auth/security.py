@@ -9,12 +9,13 @@ from db.redis import get_redis_auth_pool
 
 
 async def create_access_token(user_id: UUID, expires_delta: Optional[timedelta] = None):
-    expire = datetime.now(settings.ekb_timezone) + (
-        expires_delta or timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+    expires_delta = datetime.now() + (
+        timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     )
+    print(expires_delta)
     to_encode = {
         "sub": str(user_id),
-        "exp": expire.timestamp()
+        "exp": expires_delta.timestamp()
     }
     encoded_jwt = jwt.encode(
         to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM
@@ -22,7 +23,7 @@ async def create_access_token(user_id: UUID, expires_delta: Optional[timedelta] 
 
     redis = await get_redis_auth_pool()
     ttl = settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60
-    expiration_datetime_str = expire.strftime("%Y-%m-%d %H:%M:%S")
+    expiration_datetime_str = expires_delta.strftime("%Y-%m-%d %H:%M:%S")
     user_key = f"user_id:{user_id}"
     await redis.delete(user_key)
     await redis.setex(
